@@ -1,6 +1,7 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Request, UseInterceptors } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
+import { CacheInterceptor } from '@nestjs/cache-manager';
 import { AttendanceService } from './attendance.service';
 import { PunchDto, TrackDto } from './dto/attendance.dto';
 import { BulkTrackDto } from './dto/bulk-track.dto';
@@ -8,6 +9,7 @@ import { BulkTrackDto } from './dto/bulk-track.dto';
 @ApiTags('Attendance & Tracking')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(AuthGuard('jwt'))
+@UseInterceptors(CacheInterceptor)
 @Controller('attendance')
 export class AttendanceController {
   constructor(private readonly attendanceService: AttendanceService) {}
