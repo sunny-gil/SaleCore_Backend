@@ -22,12 +22,6 @@ export class User extends Document {
   otpExpires?: Date;
 
   @Prop()
-  latitude?: number;
-
-  @Prop()
-  longitude?: number;
-
-  @Prop()
   lastLoginDate?: Date;
 }
 

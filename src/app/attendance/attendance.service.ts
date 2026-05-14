@@ -4,6 +4,7 @@ import { Model, Types } from 'mongoose';
 import { Attendance } from './schemas/attendance.schema';
 import { Tracking, Activity } from './schemas/tracking.schema';
 import { PunchDto, TrackDto } from './dto/attendance.dto';
+import axios from 'axios';
 
 @Injectable()
 export class AttendanceService {
@@ -54,7 +55,7 @@ export class AttendanceService {
     // 2. Process Activity/Stay Logic (2km Radius)
     let currentActivity = await this.activityModel.findOne({
       userId: userObjId,
-      startTime: { $lte: currentTimestamp } // Look for activity before or at this time
+      startTime: { $lte: currentTimestamp }
     }).sort({ startTime: -1 });
 
     if (currentActivity) {
@@ -65,7 +66,6 @@ export class AttendanceService {
         longitude
       );
 
-      // If this point is historically later than the activity end time, update it
       if (distance <= 2) {
         if (currentTimestamp > currentActivity.endTime) {
           currentActivity.endTime = currentTimestamp;
@@ -75,8 +75,6 @@ export class AttendanceService {
           await currentActivity.save();
         }
       } else {
-        // Agent has moved to a new area (> 2km)
-        // Only create new activity if it's actually a new point in time
         if (currentTimestamp > currentActivity.endTime) {
           const address = await this.getAddressFromCoords(latitude, longitude);
           const newActivity = new this.activityModel({
@@ -109,7 +107,6 @@ export class AttendanceService {
   }
 
   async bulkTrack(userId: string, locations: any[]) {
-    // Sort locations by timestamp to ensure chronological processing
     const sortedLocations = locations.sort((a, b) => 
       new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
@@ -129,21 +126,18 @@ export class AttendanceService {
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
-    // 1. Get the first Punch-In of today
     const punchIn = await this.attendanceModel.findOne({
       userId: userObjId,
       type: 'PUNCH_IN',
       timestamp: { $gte: startOfToday },
     }).sort({ timestamp: 1 });
 
-    // 2. Get the last Punch-Out of today (optional info)
     const punchOut = await this.attendanceModel.findOne({
       userId: userObjId,
       type: 'PUNCH_OUT',
       timestamp: { $gte: startOfToday },
     }).sort({ timestamp: -1 });
 
-    // 3. Sum total distance traveled today from Activity records
     const activities = await this.activityModel.find({
       userId: userObjId,
       startTime: { $gte: startOfToday },
@@ -172,6 +166,28 @@ export class AttendanceService {
   }
 
   private async getAddressFromCoords(lat: number, lon: number): Promise<string> {
-    return `Area near (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+    try {
+      // Using OpenStreetMap Nominatim (Free, no key required)
+      const response = await axios.get('https://nominatim.openstreetmap.org/reverse', {
+        params: {
+          format: 'json',
+          lat: lat,
+          lon: lon,
+          zoom: 18,
+          addressdetails: 1
+        },
+        headers: {
+          'User-Agent': 'SaleCoreBackend/1.0'
+        }
+      });
+
+      if (response.data && response.data.display_name) {
+        return response.data.display_name;
+      }
+      return `Area near (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+    } catch (error) {
+      console.error('Geocoding error:', error.message);
+      return `Area near (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+    }
   }
 }
